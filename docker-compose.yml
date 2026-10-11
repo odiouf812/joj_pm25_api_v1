@@ -1,0 +1,9 @@
+services:
+  joj-pm25:
+    build: .
+    ports: ["8000:8000"]
+    volumes:            # conserve données, modèle et résultats entre redémarrages
+      - ./data:/srv/data
+      - ./models:/srv/models
+      - ./outputs:/srv/outputs
+    restart: unless-stopped

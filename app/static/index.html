@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JOJ Dakar 2026 · Qualité de l'air PM2,5</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="brand">
+      <span class="pill">Jeux Olympiques de la Jeunesse</span>
+      <h1>Dakar <span class="y">2026</span></h1>
+      <p class="sub">Prévision de la qualité de l'air · PM2,5 · Intelligence artificielle LSTM</p>
+    </div>
+    <div class="countdown" id="countdown" aria-live="polite">
+      <div class="cd-label" id="cdLabel">Ouverture dans</div>
+      <div class="cd-num" id="cdNum">–</div>
+      <div class="cd-sub" id="cdSub"></div>
+    </div>
+  </div>
+  <div class="flagbar"><i></i><i></i><i></i></div>
+</header>
+
+<main>
+  <section class="statusbar" id="statusbar">
+    <div class="chip" id="chipData">Données : …</div>
+    <div class="chip" id="chipModel">Modèle : …</div>
+    <div class="chip" id="chipFc">Prévision : …</div>
+    <div class="dl">
+      <button class="btn ghost sm" data-dl="xlsx">⬇ Excel complet</button>
+      <button class="btn ghost sm" data-dl="csv">⬇ Prévisions CSV</button>
+      <button class="btn ghost sm" data-dl="messages">⬇ Messages</button>
+    </div>
+  </section>
+
+  <nav class="steps" id="steps" role="tablist">
+    <button class="step active" data-tab="1" role="tab"><b>1</b><span>Données</span></button>
+    <button class="step" data-tab="2" role="tab"><b>2</b><span>Modèle</span></button>
+    <button class="step" data-tab="3" role="tab"><b>3</b><span>Prévisions</span></button>
+    <button class="step" data-tab="4" role="tab"><b>4</b><span>Classification</span></button>
+    <button class="step" data-tab="5" role="tab"><b>5</b><span>Risques &amp; messages</span></button>
+  </nav>
+
+  <!-- 1. DONNÉES -->
+  <section class="panel active" id="tab1">
+    <div class="grid2">
+      <div class="card">
+        <h2>Uploader le fichier Excel</h2>
+        <p class="muted">Colonnes attendues : <code>Date</code> et <code>PM2.5</code> (µg/m³), une ligne par jour.</p>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".xlsx,.xls,.xlsm,.csv" hidden>
+          <div class="drop-ico">📊</div>
+          <div><b>Glissez votre fichier ici</b><br><span class="muted">ou cliquez pour parcourir (.xlsx, .csv)</span></div>
+          <div class="fname" id="fname"></div>
+        </label>
+        <div class="opts">
+          <label class="radio"><input type="radio" name="mode" value="merge" checked> Ajouter aux données existantes</label>
+          <label class="radio"><input type="radio" name="mode" value="replace"> Remplacer tout</label>
+          <label class="check"><input type="checkbox" id="retrain" checked> Réentraîner automatiquement le modèle</label>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="btnUpload" disabled>Charger les données</button>
+          <a class="link" href="/api/template">Modèle de fichier Excel</a>
+          <a class="link" href="#" id="btnDemo">Données de démonstration (synthétiques)</a>
+        </div>
+        <div class="alert" id="uploadMsg" hidden></div>
+      </div>
+      <div class="card">
+        <h2>Aperçu des données</h2>
+        <div class="kpis" id="dataKpis"><p class="muted">Aucune donnée chargée.</p></div>
+        <div class="chartbox"><canvas id="chartHistory"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. MODÈLE -->
+  <section class="panel" id="tab2">
+    <div class="grid2">
+      <div class="card">
+        <h2>Modèle LSTM</h2>
+        <ul class="arch">
+          <li><b>LSTM 64</b> <span>séquences</span></li>
+          <li><b>Dropout 0,2</b></li>
+          <li><b>LSTM 32</b></li>
+          <li><b>Dropout 0,2</b></li>
+          <li><b>Dense 16</b> <span>ReLU</span></li>
+          <li><b>Dense 1</b> <span>PM2,5 J+1</span></li>
+        </ul>
+        <p class="muted">Fenêtre de 30 jours · Adam · arrêt anticipé · IC 95 % par Monte&nbsp;Carlo Dropout (500 simulations).</p>
+        <div class="row">
+          <button class="btn primary" id="btnTrain">Entraîner / Réentraîner</button>
+          <label class="muted inl">Époques max <input type="number" id="epochs" value="150" min="1" max="500"></label>
+        </div>
+        <div class="progress" id="progress" hidden>
+          <div class="bar"><i id="barFill"></i></div>
+          <div class="muted" id="progText"></div>
+        </div>
+        <div class="alert" id="trainMsg" hidden></div>
+      </div>
+      <div class="card">
+        <h2>Performance &amp; apprentissage</h2>
+        <div class="kpis" id="modelKpis"><p class="muted">Modèle non entraîné.</p></div>
+        <div class="chartbox"><canvas id="chartLoss"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. PRÉVISIONS -->
+  <section class="panel" id="tab3">
+    <div class="card">
+      <div class="row between">
+        <h2>Prévisions PM2,5 avec IC 95 %</h2>
+        <div class="row">
+          <label class="muted inl">Horizon
+            <select id="nDays"></select></label>
+          <button class="btn primary" id="btnPredict">Lancer la prévision</button>
+        </div>
+      </div>
+      <div class="cards" id="fcCards"><p class="muted">Aucune prévision. Entraînez le modèle puis lancez la prévision.</p></div>
+      <div class="chartbox tall"><canvas id="chartForecast"></canvas></div>
+    </div>
+  </section>
+
+  <!-- 4. CLASSIFICATION -->
+  <section class="panel" id="tab4">
+    <div class="card">
+      <h2>Classification de la qualité de l'air</h2>
+      <p class="muted">Appliquée à la prévision et aux bornes de l'IC 95 %.</p>
+      <div class="legend" id="legend"></div>
+      <div class="cards" id="classCards"><p class="muted">Aucune prévision disponible.</p></div>
+    </div>
+  </section>
+
+  <!-- 5. RISQUES -->
+  <section class="panel" id="tab5">
+    <div class="card">
+      <h2>Risque d'hospitalisation &amp; messages</h2>
+      <p class="muted" id="riskNote">Risque relatif (RR) et fraction attribuable (FA) estimés pour 10 µg/m³.</p>
+      <div class="tablewrap"><table id="riskTable"></table></div>
+    </div>
+    <div class="card">
+      <div class="row between"><h2>Messages sanitaires</h2>
+        <button class="btn ghost sm" data-dl="messages">⬇ Télécharger les messages</button></div>
+      <div id="messages"><p class="muted">Aucun message.</p></div>
+    </div>
+  </section>
+
+  <div class="card finalbar">
+    <b>Télécharger :</b>
+    <button class="btn accent" data-dl="xlsx">⬇ Rapport Excel (prévisions + risques)</button>
+    <button class="btn ghost" data-dl="csv">⬇ Prévisions (CSV)</button>
+    <button class="btn ghost" data-dl="messages">⬇ Messages (TXT)</button>
+    <button class="btn ghost" data-dl="json">⬇ JSON</button>
+    <a class="link" href="/docs" target="_blank">Documentation API</a>
+  </div>
+</main>
+
+<footer>
+  <div class="flagbar"><i></i><i></i><i></i></div>
+  <p>Outil d'aide à la décision sanitaire · JOJ Dakar 2026 · Les prévisions sont probabilistes et ne remplacent pas les avis officiels.</p>
+</footer>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/static/vendor/chart.umd.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
